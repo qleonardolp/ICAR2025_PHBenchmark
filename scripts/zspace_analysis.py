@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# Copyright (c) 2025, qleonardolp
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import matplotlib.pyplot as plt
+
+import pandas as pd
+
+from rclpy.serialization import deserialize_message
+
+from rosbag2_py import (
+  ConverterOptions,
+  SequentialReader,
+  StorageFilter,
+  StorageOptions
+)
+
+from rosidl_runtime_py.utilities import get_message
+
+# import scienceplots  # noqa: F401
+
+bag_path = 'bags/zspace_001/'
+
+topics = {
+    '/leg_impedance_controller/reference': 'KinematicPose',
+    '/leg_impedance_controller/status': 'KinematicPose',
+}
+
+reader = SequentialReader()
+reader.open(
+    StorageOptions(uri=bag_path, storage_id='mcap'), ConverterOptions())
+
+# Bag topic types
+topics_info = reader.get_all_topics_and_types()
+bag_types = {t.name: t.type for t in topics_info}
+
+types_filter = {t: get_message(bag_types[t]) for t in topics if t in bag_types}
+
+# Filter topics
+reader.set_filter(StorageFilter(topics=list(topics.keys())))
+
+# Collect
+t_begin = None
+series_names = {'ref', 'e', 'de', 'f_int'}
+data = {name: [] for name in series_names}
+time = []
+
+while reader.has_next():
+    topic_name, raw, t_ns = reader.read_next()
+    if topic_name not in types_filter:
+        continue
+
+    # Align the timestamp based on reference topic
+    if t_begin is None and topic_name != '/leg_impedance_controller/reference':
+        continue
+
+    if t_begin is None:
+        t_begin = t_ns
+
+    t = (t_ns - t_begin) / 1e9  # nanoseconds
+    time.append(t)
+
+    msg = deserialize_message(raw, types_filter[topic_name])
+
+    if topic_name == '/leg_impedance_controller/reference':
+        data['ref'].append(msg.pose.position.z)
+
+    if topic_name == '/leg_impedance_controller/status':
+        data['f_int'].append(msg.pose_accel.linear.z)
+        data['de'].append(msg.pose_twist.linear.z)
+        data['e'].append(msg.pose.position.z)
+
+df = pd.DataFrame({'t': time})
+for series in data:
+    df[series] = pd.Series(data[series], index=range(len(data[series])))
+
+df = df[(df['t'] > 4.90) & (df['t'] <= 7.0)]  # Slice 4.9 -- 5.7
+
+# Plot
+# plt.style.use(['science', 'ieee'])
+
+fig, ax = plt.subplots()
+ax.set_xlabel('Time (s)')
+ax.plot(df['t'], df['e'],
+        label=r'$e(t)$',
+        linestyle='-', linewidth=0.8, color='blue')
+ax.plot(df['t'], df['de'],
+        label=r'$\dot{e}(t)$',
+        linewidth=0.8, color='k')
+ax.grid(True)
+
+ax3 = plt.figure().add_subplot(projection='3d')
+
+ax3.set_xlabel(r'$e(t)$')
+ax3.set_ylabel(r'$\dot{e}(t)$')
+ax3.set_zlabel(r'$f_{int}(t)$')
+ax3.plot(df['e'], df['de'], df['f_int'],
+        linestyle='-', linewidth=0.8, color='blue')
+
+ax3.legend(loc='upper left', columnspacing=0.5)
+ax3.grid(True, alpha=0.3)
+
+plt.show()
