@@ -106,7 +106,7 @@ ax3.set_xlabel(r'$e(t)$')
 ax3.set_ylabel(r'$\dot{e}(t)$')
 ax3.set_zlabel(r'$f_{int}(t)$')
 ax3.plot(df['e'], df['de'], df['f_int'],
-        linestyle='-', linewidth=0.8, color='blue')
+         linestyle='-', linewidth=0.8, color='blue')
 
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.3)

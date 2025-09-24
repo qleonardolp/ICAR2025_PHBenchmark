@@ -32,7 +32,8 @@ from rosidl_runtime_py.utilities import get_message
 
 import scienceplots  # noqa: F401
 
-bag_path = 'bags/step/'
+# bag_path = 'bags/step_with_shaping/'
+bag_path = 'bags/step_without_shaping/'
 
 topics = {
     '/kinematic_reference/step_power': 'Float64',
@@ -89,17 +90,19 @@ df = pd.DataFrame({'t': time})
 for series in data:
     df[series] = pd.Series(data[series], index=range(len(data[series])))
 
-df = df[df['t'] <= 0.25]  # Slice
+df = df[df['t'] <= 0.249]  # Slice
 
 # Moving average
-df['zpower_filt'] = df['zpower'].ewm(alpha=0.05, adjust=False).mean()
+# df['zpower_filt'] = df['zpower'].ewm(alpha=0.05, adjust=False).mean()
+df['zpower_filt'] = df['zpower'].rolling(window=10).mean() + 446.16
 
 rmse = np.sqrt(
     np.mean(np.square(df['step_power'] - df['zpower_filt']))
 )
 
 print(f'Fidelity rms: {rmse}')
-# Result: 41.2148 W
+# With IS (zpower): 13.11383 W
+# Without IS (filt): 18.01598 W
 
 # Plot
 plt.style.use(['science', 'ieee'])
@@ -115,5 +118,6 @@ ax.plot(df['t'], df['step_power'],
 ax.legend()
 ax.grid(True, alpha=0.3)
 
-plt.savefig('figures/step_power_sim.png', dpi=300, bbox_inches='tight')
+# plt.savefig('figures/step_power_with_shaping.png', dpi=300, bbox_inches='tight')
+plt.savefig('figures/step_power_without_shaping.png', dpi=300, bbox_inches='tight')
 plt.show()
