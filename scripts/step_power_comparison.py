@@ -110,16 +110,16 @@ fig, axs = plt.subplots(2, 1, sharex=True)
 fig.subplots_adjust(hspace=0)
 
 axs[0].plot(data_frames[0]['t'], data_frames[0]['zpower_filt'],
-        label=r'$[{y}^T{u}]_{\Omega}$',
+        label=r'${P}_{{x}}$',
         linestyle='-', linewidth=0.8, color="#188BFF")
 axs[0].plot(data_frames[0]['t'], data_frames[0]['step_power'],
-        label=r'${P}_{step}$', linestyle='-.', linewidth=0.8, color='k')
+        label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
 
 axs[1].plot(data_frames[1]['t'], data_frames[1]['zpower_filt'],
-        label=r'$[{y}^T{u}]_\Omega$',
+        label=r'${P}_{{x}}$',
         linestyle='-', linewidth=0.8, color="#CA1D0A")
 axs[1].plot(data_frames[1]['t'], data_frames[1]['step_power'],
-        label=r'${P}_{step}$', linestyle='-.', linewidth=0.8, color='k')
+        label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
 
 fig.supxlabel('Time (s)', y=0.0)
 fig.supylabel('Power (W)')
