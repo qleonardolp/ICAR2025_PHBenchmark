@@ -42,9 +42,9 @@ topics = {
 
 readers = []
 for bag in bags:
-  reader = SequentialReader()
-  reader.open(StorageOptions(uri=bag, storage_id='mcap'), ConverterOptions())
-  readers.append(reader)
+    reader = SequentialReader()
+    reader.open(StorageOptions(uri=bag, storage_id='mcap'), ConverterOptions())
+    readers.append(reader)
 
 # Bag topic types
 topics_info = readers[0].get_all_topics_and_types()
@@ -55,39 +55,39 @@ types_filter = {t: get_message(bag_types[t]) for t in topics if t in bag_types}
 data_frames = []
 
 for reader in readers:
-  reader.set_filter(StorageFilter(topics=list(topics.keys())))  # Filter topics
-  data = {name: [] for name in {'reference', 'step_power', 'zpower'}}
-  t_begin = None
-  time = []
-  while reader.has_next():
-      topic_name, raw, t_ns = reader.read_next()
-      if topic_name not in types_filter:
-          continue
+    reader.set_filter(StorageFilter(topics=list(topics.keys())))  # Filter topics
+    data = {name: [] for name in {'reference', 'step_power', 'zpower'}}
+    t_begin = None
+    time = []
+    while reader.has_next():
+        topic_name, raw, t_ns = reader.read_next()
+        if topic_name not in types_filter:
+            continue
 
-      msg = deserialize_message(raw, types_filter[topic_name])
+        msg = deserialize_message(raw, types_filter[topic_name])
 
-      if t_begin is None and topic_name != '/kinematic_reference/step_power':
-          continue
+        if t_begin is None and topic_name != '/kinematic_reference/step_power':
+            continue
 
-      if t_begin is None:
-          t_begin = t_ns
+        if t_begin is None:
+            t_begin = t_ns
 
-      t = (t_ns - t_begin) / 1e9  # nanoseconds
-      time.append(t)
+        t = (t_ns - t_begin) / 1e9  # nanoseconds
+        time.append(t)
 
-      if topic_name == '/kinematic_reference/step_power':
-          data['step_power'].append(msg.data)
+        if topic_name == '/kinematic_reference/step_power':
+            data['step_power'].append(msg.data)
 
-      if topic_name == '/impedance_controller/reference':
-          data['reference'].append(msg.pose.position.x)
+        if topic_name == '/impedance_controller/reference':
+            data['reference'].append(msg.pose.position.x)
 
-      if topic_name == '/impedance_controller/status':
-          data['zpower'].append(msg.pose_twist.angular.z)
-  df = pd.DataFrame({'t': time})
-  for series in data:
-      df[series] = pd.Series(data[series], index=range(len(data[series])))
-  df = df[df['t'] <= 0.249]
-  data_frames.append(df)
+        if topic_name == '/impedance_controller/status':
+            data['zpower'].append(msg.pose_twist.angular.z)
+    df = pd.DataFrame({'t': time})
+    for series in data:
+        df[series] = pd.Series(data[series], index=range(len(data[series])))
+    df = df[df['t'] <= 0.249]
+    data_frames.append(df)
 
 # Moving average
 data_frames[0]['zpower_filt'] = data_frames[0]['zpower']
@@ -109,25 +109,27 @@ plt.style.use(['science', 'ieee'])
 fig, axs = plt.subplots(2, 1, sharex=True)
 fig.subplots_adjust(hspace=0)
 
-axs[0].plot(data_frames[0]['t'], data_frames[0]['zpower_filt'],
-        label=r'${P}_{{x}}$',
-        linestyle='-', linewidth=0.8, color="#188BFF")
-axs[0].plot(data_frames[0]['t'], data_frames[0]['step_power'],
-        label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
+axs[0].plot(
+    data_frames[0]['t'], data_frames[0]['zpower_filt'],
+    label=r'${P}_{{x}}$', linestyle='-', linewidth=0.8, color='#188BFF')
+axs[0].plot(
+    data_frames[0]['t'], data_frames[0]['step_power'],
+    label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
 
-axs[1].plot(data_frames[1]['t'], data_frames[1]['zpower_filt'],
-        label=r'${P}_{{x}}$',
-        linestyle='-', linewidth=0.8, color="#CA1D0A")
-axs[1].plot(data_frames[1]['t'], data_frames[1]['step_power'],
-        label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
+axs[1].plot(
+    data_frames[1]['t'], data_frames[1]['zpower_filt'],
+    label=r'${P}_{{x}}$', linestyle='-', linewidth=0.8, color='#CA1D0A')
+axs[1].plot(
+    data_frames[1]['t'], data_frames[1]['step_power'],
+    label=r'${P}_{\text{step}}$', linestyle='-.', linewidth=0.8, color='k')
 
 fig.supxlabel('Time (s)', y=0.0)
 fig.supylabel('Power (W)')
 
 for ax in axs:
-  ax.legend()
-  ax.set_ylim(-85, 180)
-  ax.grid(True, alpha=0.3)
+    ax.legend()
+    ax.set_ylim(-85, 180)
+    ax.grid(True, alpha=0.3)
 
 plt.savefig('figures/step_power_comparison.png', dpi=300, bbox_inches='tight')
 plt.show()
