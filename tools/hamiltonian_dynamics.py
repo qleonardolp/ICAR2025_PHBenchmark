@@ -31,7 +31,7 @@ wn = math.sqrt(Kd/Md)
 A = np.array([[0, 1], [-Kd/Md, -Dd/Md]])
 
 # Not working
-B = np.array([[0, 0], [1, Kd]])  ## maps f_int and reference (x_d)
+B = np.array([[0, 0], [1, Kd]])  # maps f_int and reference (x_d)
 
 # Simulation params
 duration = 2 * math.pi / wn  # how many seconds to simulate
@@ -45,8 +45,8 @@ e_0 = 0.254
 de_0 = -0.2
 
 
-def F(t, state, input):
-    return A @ state + B @ input
+def F(t, x, u):
+    return A @ x + B @ u
 
 
 y[0] = np.array([e_0, de_0])
@@ -68,7 +68,7 @@ for k in range(1, len(time)):
     dde = dy[1] / dt
     dHe = - (Md * dde + Dd * y[k, 1])  # here only the damping is known (structurally)
     dHde = Md * y[k, 1]
-    if k == step_k:  ## reset the Hamiltonian when a step is applied
+    if k == step_k:  # reset the Hamiltonian when a step is applied
         hamilton[k - 1] = 0.5*Md*y[k, 1]*y[k, 1] + 0.5*Kd*step**2
     hamilton[k] = hamilton[k - 1] + (dHe * dy[0] + dHde * dy[1])
 
