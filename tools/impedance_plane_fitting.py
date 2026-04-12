@@ -24,9 +24,11 @@ from rosbag2_py import (
   StorageOptions
 )
 from rosidl_runtime_py.utilities import get_message
-import scienceplots  # noqa: F401
 from scipy.signal import butter, filtfilt
 
+np.set_printoptions(precision=8, suppress=True)
+
+## Utils
 # Cartesian axis index map
 axis_dict = {'x': 0, 'y': 1, 'z': 2, 'r': 3, 'p': 4, 'w': 5}
 
@@ -36,20 +38,22 @@ def lpfilter(data, cutoff, sampling):
     y = filtfilt(b, a, data, method='gust')
     return y
 
-#bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
-bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
+## ROS Bag configuration
+bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
+#bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
 controller_name = 'hyl_controller'
-
-# ATTENTION: set accordingly {x, y, z, r, p, w}
-e_idx = axis_dict['z'] + 6  # Jump the first 6 field
-de_idx = e_idx + 6
-dde_idx = de_idx + 6
 
 topics = {
     f'/{controller_name}/status': 'Float64MultiArray',
     f'/{controller_name}/reference': 'KinematicPose',
 }
 
+# ATTENTION: set accordingly {x, y, z, r, p, w}
+e_idx = axis_dict['z'] + 6  # Jump the first 6 field
+de_idx = e_idx + 6
+dde_idx = de_idx + 6
+
+## Bag deserialization and conversion to pandas DataFrame
 reader = SequentialReader()
 reader.open(
     StorageOptions(uri=bag_path, storage_id='mcap'), ConverterOptions())
@@ -57,7 +61,6 @@ reader.open(
 # Bag topic types
 topics_info = reader.get_all_topics_and_types()
 bag_types = {t.name: t.type for t in topics_info}
-
 types_filter = {t: get_message(bag_types[t]) for t in topics if t in bag_types}
 
 # Filter topics
@@ -100,55 +103,44 @@ for series in data:
     df.dropna(how='any', inplace=True)
 
 # Timeseries filtering
-filt = True
-if filt:
-    fc = 40.0  # cutoff frequency [Hz]
-    df['e_filt'] = lpfilter(df['e'], fc, 1000)
-    df['de_filt'] = lpfilter(df['de'], fc, 1000)
-    df['dde_filt'] = lpfilter(df['dde'], fc, 1000)
-else:
-    df['e_filt'] = df['e']
-    df['de_filt'] = df['de']
-    df['dde_filt'] = df['dde']
+fc = 40.0  # cutoff frequency [Hz]
+df['e_filt'] = lpfilter(df['e'], fc, 1000)
+df['de_filt'] = lpfilter(df['de'], fc, 1000)
+df['dde_filt'] = lpfilter(df['dde'], fc, 1000)
 
 # Time slice
 df = df[df['t'] > 1.0]
 
-print(f'Average inertia m_zz: {df['m'].mean():.3f}')
 
-# Plot
-# plt.style.use(['science', 'ieee'])
+## SVD processing
+X = df['e_filt'].to_numpy()
+Y = df['de_filt'].to_numpy()
+Z = df['dde_filt'].to_numpy()
+# Center points
+X = X - np.mean(X)
+Y = Y - np.mean(Y)
+Z = Z - np.mean(Z)
 
-#fig, ax = plt.subplots()
-#ax.set_xlabel('Time (s)')
-#ax.plot(df['t'], df['m'], label=r'$m_{zz}$', linestyle='-', linewidth=0.8, color='blue')
-#ax.plot(df['t'], df['de_filt'], label=r'$\ddot{e}$', linewidth=0.8, color='k')
-#ax.grid(True)
+# Reduce dimensionality to
+# minimize the computational cost
+X = X[::10]
+Y = Y[::10]
+Z = Z[::10]
+
+# Stack timeseries in a matrix
+M = np.array([X, Y, Z])
+# Run SVD
+U, s, Vh = np.linalg.svd(M.T)
+# Get the least singular value eigenvector
+plane_n = np.abs(Vh[-1, :])
+
+print(f'SVD-based plane normal: {plane_n}')
 
 # Impedance Params
 k_d = 640.0
 d_d = 160.0
-m_d = 0.223
-#m_d = 10.0
-
-# Reference plane
-X = np.array([-0.0301, -0.0342, 0.0378, 0.0370])
-Y = np.array([0.1232, 0.1280, -0.1425, -0.1503])
-# Plane equation
-Z = -k_d/m_d * X - d_d/m_d * Y
-
-ax3 = plt.figure().add_subplot(projection='3d')
-
-ax3.set_xlabel(r'$e$')
-ax3.set_ylabel(r'$\dot{e}$')
-ax3.set_zlabel(r'$\ddot{e}$')
-ax3.plot(df['e_filt'], df['de_filt'], df['dde_filt'],
-         linestyle='-', linewidth=0.7, color='blue')
-
-ax3.plot_trisurf(X, Y, Z,
-                 shade=False, alpha=0.5, color='orange')
-
-ax3.legend(loc='upper left', columnspacing=0.5)
-ax3.grid(True, alpha=0.25)
-
-plt.show()
+m_d = 10.0
+designed_plane_n = np.array([k_d, d_d, m_d])
+designed_norm = np.linalg.norm(designed_plane_n)
+designed_plane_n = designed_plane_n / designed_norm
+print(f'Designed plane normal:  {designed_plane_n}')
