@@ -24,6 +24,7 @@ from rosbag2_py import (
   StorageOptions
 )
 from rosidl_runtime_py.utilities import get_message
+from scipy.spatial.transform import Rotation
 from scipy.signal import butter, filtfilt
 
 np.set_printoptions(precision=8, suppress=True)
@@ -39,8 +40,10 @@ def lpfilter(data, cutoff, sampling):
     return y
 
 ## ROS Bag configuration
-bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
-#bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
+#bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
+bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
+#bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
+
 controller_name = 'hyl_controller'
 
 topics = {
@@ -139,8 +142,19 @@ print(f'SVD-based plane normal: {plane_n}')
 # Impedance Params
 k_d = 640.0
 d_d = 160.0
-m_d = 10.0
+m_d = 0.223
+
 designed_plane_n = np.array([k_d, d_d, m_d])
 designed_norm = np.linalg.norm(designed_plane_n)
 designed_plane_n = designed_plane_n / designed_norm
 print(f'Designed plane normal:  {designed_plane_n}')
+
+# Equivalent rotation
+Rot = Rotation.from_rotvec(np.cross(designed_plane_n, plane_n)).as_matrix()
+rotated_params = Rot @ np.array([k_d, d_d, m_d])
+
+np.set_printoptions(precision=6, suppress=True)
+print(f'Params from rotation:   {rotated_params}')
+
+sin_theta = np.linalg.norm(np.cross(designed_plane_n, plane_n))
+print(f'Rotation angle (°): {np.rad2deg(np.arcsin(sin_theta)):.4f}')
