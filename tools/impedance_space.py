@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from rclpy.serialization import deserialize_message
 from rosbag2_py import (
@@ -30,14 +30,19 @@ from scipy.signal import butter, filtfilt
 # Cartesian axis index map
 axis_dict = {'x': 0, 'y': 1, 'z': 2, 'r': 3, 'p': 4, 'w': 5}
 
+
 def lpfilter(data, cutoff, sampling):
     """Zero phase low-pass filter to smooth timeseries."""
     b, a = butter(4, cutoff, analog=False, fs=sampling)
     y = filtfilt(b, a, data, method='gust')
     return y
 
-#bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
+
+# bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
 bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
+# bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
+# bag_path = '../../sys_id/hyl2_sine_with_contact/'
+
 controller_name = 'hyl_controller'
 
 # ATTENTION: set accordingly {x, y, z, r, p, w}
@@ -86,23 +91,27 @@ while reader.has_next():
 
     msg = deserialize_message(raw, types_filter[topic_name])
 
-    # filter Float64MultiArray messages
+    # filter 'Float64MultiArray' messages
     if topic_name == list(topics.keys())[0]:
         if np.isfinite(np.array(msg.data)).all():
-          data['dde'].append(msg.data[dde_idx])
-          data['de'].append(msg.data[de_idx])
-          data['e'].append(msg.data[e_idx])
-          data['m'].append(msg.data[4])  # m_zz
+            data['dde'].append(msg.data[dde_idx])
+            data['de'].append(msg.data[de_idx])
+            data['e'].append(msg.data[e_idx])
+            data['m'].append(msg.data[4])  # m_zz
 
 df = pd.DataFrame({'t': time})
 for series in data:
     df[series] = pd.Series(data[series], index=range(len(data[series])))
-    df.dropna(how='any', inplace=True)
+    df.dropna(how='any', inplace=True)  # remove rows with NaN
+
+# Remove acceleration outliers
+acc_threshold = 4.0  # m/ss
+df = df[df['dde'].abs() < acc_threshold]
 
 # Timeseries filtering
 filt = True
 if filt:
-    fc = 40.0  # cutoff frequency [Hz]
+    fc = 100.0  # cutoff frequency [Hz]
     df['e_filt'] = lpfilter(df['e'], fc, 1000)
     df['de_filt'] = lpfilter(df['de'], fc, 1000)
     df['dde_filt'] = lpfilter(df['dde'], fc, 1000)
@@ -112,41 +121,45 @@ else:
     df['dde_filt'] = df['dde']
 
 # Time slice
-df = df[df['t'] > 1.0]
+# df = df[(df['t'] > 2.716) & (df['t'] < 4.0)]  # hyl2_PRBS_with_contact
+# df = df[(df['t'] > 1.650) & (df['t'] < 7.0)]  # hyl2_sine_with_contact
 
-print(f'Average inertia m_zz: {df['m'].mean():.3f}')
+print(f"Average inertia m_zz: {df['m'].mean():.3f}")
 
 # Plot
 # plt.style.use(['science', 'ieee'])
 
-#fig, ax = plt.subplots()
-#ax.set_xlabel('Time (s)')
-#ax.plot(df['t'], df['m'], label=r'$m_{zz}$', linestyle='-', linewidth=0.8, color='blue')
-#ax.plot(df['t'], df['de_filt'], label=r'$\ddot{e}$', linewidth=0.8, color='k')
-#ax.grid(True)
+# fig, ax = plt.subplots()
+# ax.set_xlabel('Time (s)')
+# ax.plot(df['t'], df['de'], label=r'${e}$', linestyle='-', linewidth=0.8, color='blue')
+# ax.plot(df['t'], df['dde'], label=r'$\dot{e}$', linewidth=0.8, color='k')
+# ax.plot(df['t'], df['dde_filt'], label=r'$\ddot{e}$', linewidth=0.8, color='r')
+# ax.grid(True)
 
 # Impedance Params
-k_d = 640.0
-d_d = 160.0
-m_d = 0.223
-#m_d = 10.0
+k_d = 639.91
+d_d = 160.32
+m_d = 0.7484
+# m_d = 10.0
 
-# Reference plane
-X = np.array([-0.0301, -0.0342, 0.0378, 0.0370])
-Y = np.array([0.1232, 0.1280, -0.1425, -0.1503])
-# Plane equation
-Z = -k_d/m_d * X - d_d/m_d * Y
+# Phase flow vector field
+X = df['e_filt'].to_numpy()[::20]
+Y = df['de_filt'].to_numpy()[::20]
+Z = df['dde_filt'].to_numpy()[::20]
+
+U = Y
+V = - k_d/m_d * X - d_d/m_d * Y
+W = - k_d/m_d * Y - d_d/m_d * Z
 
 ax3 = plt.figure().add_subplot(projection='3d')
 
 ax3.set_xlabel(r'$e$')
 ax3.set_ylabel(r'$\dot{e}$')
 ax3.set_zlabel(r'$\ddot{e}$')
-ax3.plot(df['e_filt'], df['de_filt'], df['dde_filt'],
+ax3.plot(df['e'], df['de_filt'], df['dde_filt'],
          linestyle='-', linewidth=0.7, color='blue')
 
-ax3.plot_trisurf(X, Y, Z,
-                 shade=False, alpha=0.5, color='orange')
+ax3.quiver(X, Y, Z, U, V, W, normalize=True, length=0.05, arrow_length_ratio=0.06)
 
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.25)

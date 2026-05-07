@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 from rclpy.serialization import deserialize_message
 from rosbag2_py import (
@@ -24,14 +23,14 @@ from rosbag2_py import (
   StorageOptions
 )
 from rosidl_runtime_py.utilities import get_message
-from scipy.spatial.transform import Rotation
 from scipy.signal import butter, filtfilt
+from scipy.spatial.transform import Rotation
 
 np.set_printoptions(precision=8, suppress=True)
 
-## Utils
 # Cartesian axis index map
 axis_dict = {'x': 0, 'y': 1, 'z': 2, 'r': 3, 'p': 4, 'w': 5}
+
 
 def lpfilter(data, cutoff, sampling):
     """Zero phase low-pass filter to smooth timeseries."""
@@ -39,10 +38,11 @@ def lpfilter(data, cutoff, sampling):
     y = filtfilt(b, a, data, method='gust')
     return y
 
-## ROS Bag configuration
-#bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
+
+# ROS Bag configuration
+# bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
 bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
-#bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
+# bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
 
 controller_name = 'hyl_controller'
 
@@ -56,7 +56,7 @@ e_idx = axis_dict['z'] + 6  # Jump the first 6 field
 de_idx = e_idx + 6
 dde_idx = de_idx + 6
 
-## Bag deserialization and conversion to pandas DataFrame
+# Bag deserialization and conversion to pandas DataFrame
 reader = SequentialReader()
 reader.open(
     StorageOptions(uri=bag_path, storage_id='mcap'), ConverterOptions())
@@ -95,10 +95,10 @@ while reader.has_next():
     # filter Float64MultiArray messages
     if topic_name == list(topics.keys())[0]:
         if np.isfinite(np.array(msg.data)).all():
-          data['dde'].append(msg.data[dde_idx])
-          data['de'].append(msg.data[de_idx])
-          data['e'].append(msg.data[e_idx])
-          data['m'].append(msg.data[4])  # m_zz
+            data['dde'].append(msg.data[dde_idx])
+            data['de'].append(msg.data[de_idx])
+            data['e'].append(msg.data[e_idx])
+            data['m'].append(msg.data[4])  # m_zz
 
 df = pd.DataFrame({'t': time})
 for series in data:
@@ -115,7 +115,7 @@ df['dde_filt'] = lpfilter(df['dde'], fc, 1000)
 df = df[df['t'] > 1.0]
 
 
-## SVD processing
+# SVD processing
 X = df['e_filt'].to_numpy()
 Y = df['de_filt'].to_numpy()
 Z = df['dde_filt'].to_numpy()

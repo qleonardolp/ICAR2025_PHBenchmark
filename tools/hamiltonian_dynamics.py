@@ -26,39 +26,43 @@ import numpy as np
 # System params
 Md = 4.5
 Kd = 13.0
-Dd = 2 * 0.25 * math.sqrt(Kd * Md)
+Dd = 2 * 0.2 * math.sqrt(Kd * Md)
 wn = math.sqrt(Kd/Md)
-A = np.array([[0, 1], [-Kd/Md, -Dd/Md]])
 
-# Not working
-B = np.array([[0, 0], [1, Kd]])  # maps f_int and reference (x_d)
+dt = 0.001
+# Discrete realization
+A = np.eye(2) + np.array([[0, 1], [-Kd/Md, -Dd/Md]]) * dt
+
+# Discrete realization
+B = np.array([[0, 0], [1/Md, Kd/Md]]) * dt  # maps f_int and reference (x_d)
 
 # Simulation params
 duration = 2 * math.pi / wn  # how many seconds to simulate
 duration = 16.0
-dt = 0.001
 time = np.arange(0.0, duration, dt)
 y = np.empty((len(time), 2))  # State time vector
+u = np.empty((len(time), 2))  # Input time vector
 
 # Initial state
 e_0 = 0.254
 de_0 = -0.2
 
 
-def F(t, x, u):
+def F(x, u):
     return A @ x + B @ u
 
 
 y[0] = np.array([e_0, de_0])
-u = np.array([0.0, 0.0])
+u[0] = np.array([0.0, 0.0])
 step_k = 3420
 step = 0.23
 
 # Forward Euler integration
 for k in range(1, len(time)):
     if k == step_k:
-        y[k - 1, 0] = step
-    y[k] = y[k - 1] + F(time[k - 1], y[k - 1], u) * dt
+        u[k - 1, 1] = step
+    u[k] = u[k - 1]
+    y[k] = F(y[k - 1], u[k])
 
 hamilton = np.empty((len(time), 1))
 hamilton[0] = 0.5 * (de_0*Md*de_0 + e_0*Kd*e_0)
@@ -69,7 +73,7 @@ for k in range(1, len(time)):
     dHe = - (Md * dde + Dd * y[k, 1])  # here only the damping is known (structurally)
     dHde = Md * y[k, 1]
     if k == step_k:  # reset the Hamiltonian when a step is applied
-        hamilton[k - 1] = 0.5*Md*y[k, 1]*y[k, 1] + 0.5*Kd*step**2
+        hamilton[k - 1] = 0.5*Md*y[k, 1]*y[k, 1] + 0.5*Kd*u[k, 1]*u[k, 1]
     hamilton[k] = hamilton[k - 1] + (dHe * dy[0] + dHde * dy[1])
 
 # Plot bounds
@@ -86,6 +90,11 @@ y_lb = y_lb - abs(y_lb) * 0.10
 X = np.arange(x_lb, x_ub, (x_ub - x_lb)/20)
 Y = np.arange(y_lb, y_ub, (y_ub - y_lb)/20)
 U, V = np.meshgrid(-Kd*X, -Md*Y)
+
+# Fase flow (state space gradient)
+# X = np.arange(x_lb, x_ub, (x_ub - x_lb)/20)
+# Y = np.arange(y_lb, y_ub, (y_ub - y_lb)/20)
+# U, V = np.meshgrid(Y, -Kd/Md*X - Dd/Md*Y)
 
 
 fig = plt.figure(figsize=(5, 4))
@@ -106,29 +115,24 @@ def animate(i):
     scale = 0.1
     # Plot a line starting at the
     # phase space point, align with -grad(F)
-    gradx = [y[i, 0], (1 - 0.05*Kd) * y[i, 0]]
+    gradx = [y[i, 0], (1 - 0.05*Kd*u[i, 1]) * y[i, 0]]
     grady = [y[i, 1], (1 - 0.05*Md) * y[i, 1]]
     grad_line.set_data(gradx, grady)
 
-    dy = A @ y[i]
-    tangx = [y[i, 0], y[i, 0] + scale*dy[0]]
-    tangy = [y[i, 1], y[i, 1] + scale*dy[1]]
-    tang_line.set_data(tangx, tangy)
-
     if i == 0:
-        ddy = 0 * dy
+        dot_y = 0 * y[i]
     else:
-        ddy = (A @ y[i] - A @ y[i - 1]) / dt
+        dot_y = (y[i] - y[i - 1]) / dt
 
-    accx = [y[i, 0], y[i, 0] + scale*ddy[0]]
-    accy = [y[i, 1], y[i, 1] + scale*ddy[1]]
-    acc_line.set_data(accx, accy)
+    tangx = [y[i, 0], y[i, 0] + scale*dot_y[0]]
+    tangy = [y[i, 1], y[i, 1] + scale*dot_y[1]]
+    tang_line.set_data(tangx, tangy)
 
     history_x = y[:i, 0]
     history_y = y[:i, 1]
     trace.set_data(history_x, history_y)
     time_text.set_text(time_template % (i*dt))
-    return trace, grad_line, tang_line, acc_line, time_text
+    return trace, grad_line, tang_line, time_text
 
 
 ani = animation.FuncAnimation(
