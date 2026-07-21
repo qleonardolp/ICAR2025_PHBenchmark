@@ -38,10 +38,10 @@ def lpfilter(data, cutoff, sampling):
     return y
 
 bag_path = '../../sys_id/spot_leg_PRBS_nonlinear/'
-bag_path = '../../sys_id/bravo7_chirp/'
+bag_path = '../../sys_id/spot_leg_chirp/'
 
-controller_name = 'spot_leg_control'
 controller_name = 'bravo7_controller'
+controller_name = 'spot_leg_control'
 
 # ATTENTION: set accordingly {x, y, z, r, p, w}
 e_idx = axis_dict['x'] + 6  # Jump the first 6 fields
@@ -108,7 +108,7 @@ acc_threshold = 4.0  # m/ss
 #df = df[df['dde'].abs() < acc_threshold]
 
 # Timeseries filtering
-filt = True
+filt = False
 if filt:
     fc = 100.0  # cutoff frequency [Hz]
     df['e_filt'] = lpfilter(df['e'], fc, 1000)
@@ -122,7 +122,8 @@ else:
 # Time slice
 # df = df[(df['t'] > 2.716) & (df['t'] < 4.0)]  # hyl2_PRBS_with_contact
 # df = df[(df['t'] > 1.650) & (df['t'] < 7.0)]  # hyl2_sine_with_contact
-df = df[(df['t'] > 5.3) & (df['t'] < 7.0)]  # bravo7_chirp
+# df = df[(df['t'] > 5.3) & (df['t'] < 7.0)]  # bravo7_chirp
+df = df[(df['t'] > 1.95) & (df['t'] < 4.0)]  # spot_leg_chirp
 
 print(f"Average inertia m_zz: {df['m'].mean():.3f}")
 
