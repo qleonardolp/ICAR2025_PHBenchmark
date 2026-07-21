@@ -40,11 +40,9 @@ def lpfilter(data, cutoff, sampling):
 
 
 # ROS Bag configuration
-# bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
-bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
-# bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
+bag_path = '../../sys_id/bravo7_sine_K500D0/'
 
-controller_name = 'hyl_controller'
+controller_name = 'bravo7_controller'
 
 topics = {
     f'/{controller_name}/status': 'Float64MultiArray',
@@ -52,7 +50,7 @@ topics = {
 }
 
 # ATTENTION: set accordingly {x, y, z, r, p, w}
-e_idx = axis_dict['z'] + 6  # Jump the first 6 field
+e_idx = axis_dict['x'] + 6  # Jump the first 6 fields
 de_idx = e_idx + 6
 dde_idx = de_idx + 6
 
@@ -98,7 +96,7 @@ while reader.has_next():
             data['dde'].append(msg.data[dde_idx])
             data['de'].append(msg.data[de_idx])
             data['e'].append(msg.data[e_idx])
-            data['m'].append(msg.data[4])  # m_zz
+            data['m'].append(msg.data[4])  # m_xx
 
 df = pd.DataFrame({'t': time})
 for series in data:
@@ -112,13 +110,12 @@ df['de_filt'] = lpfilter(df['de'], fc, 1000)
 df['dde_filt'] = lpfilter(df['dde'], fc, 1000)
 
 # Time slice
-df = df[df['t'] > 1.0]
-
+df = df[df['t'] > 0.1]
 
 # SVD processing
-X = df['e_filt'].to_numpy()
-Y = df['de_filt'].to_numpy()
-Z = df['dde_filt'].to_numpy()
+X = df['e'].to_numpy()
+Y = df['de'].to_numpy()
+Z = df['dde'].to_numpy()
 # Center points
 X = X - np.mean(X)
 Y = Y - np.mean(Y)
@@ -140,9 +137,9 @@ plane_n = np.abs(Vh[-1, :])
 print(f'SVD-based plane normal: {plane_n}')
 
 # Impedance Params
-k_d = 640.0
-d_d = 160.0
-m_d = 0.223
+k_d = 500.0
+d_d = 0.0
+m_d = 5.102
 
 designed_plane_n = np.array([k_d, d_d, m_d])
 designed_norm = np.linalg.norm(designed_plane_n)

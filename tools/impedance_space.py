@@ -24,7 +24,7 @@ from rosbag2_py import (
   StorageOptions
 )
 from rosidl_runtime_py.utilities import get_message
-import scienceplots  # noqa: F401
+# import scienceplots  # noqa: F401
 from scipy.signal import butter, filtfilt
 
 # Cartesian axis index map
@@ -37,16 +37,14 @@ def lpfilter(data, cutoff, sampling):
     y = filtfilt(b, a, data, method='gust')
     return y
 
+bag_path = '../../sys_id/spot_leg_PRBS_nonlinear/'
+bag_path = '../../sys_id/bravo7_chirp/'
 
-# bag_path = '../../sys_id/hyl2_PRBS_K640D160M10/'
-bag_path = '../../sys_id/hyl2_PRBS_K640D160/'
-# bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
-# bag_path = '../../sys_id/hyl2_sine_with_contact/'
-
-controller_name = 'hyl_controller'
+controller_name = 'spot_leg_control'
+controller_name = 'bravo7_controller'
 
 # ATTENTION: set accordingly {x, y, z, r, p, w}
-e_idx = axis_dict['z'] + 6  # Jump the first 6 field
+e_idx = axis_dict['x'] + 6  # Jump the first 6 fields
 de_idx = e_idx + 6
 dde_idx = de_idx + 6
 
@@ -70,7 +68,7 @@ reader.set_filter(StorageFilter(topics=list(topics.keys())))
 
 # Collect
 t_begin = None
-series_names = {'e', 'de', 'dde', 'm'}
+series_names = {'e', 'de', 'dde', 'm', 'k_non'}
 data = {name: [] for name in series_names}
 time = []
 
@@ -97,7 +95,8 @@ while reader.has_next():
             data['dde'].append(msg.data[dde_idx])
             data['de'].append(msg.data[de_idx])
             data['e'].append(msg.data[e_idx])
-            data['m'].append(msg.data[4])  # m_zz
+            data['m'].append(msg.data[4])  # m_xx
+            data['k_non'].append(msg.data[9])  # Nonlinear stiffness
 
 df = pd.DataFrame({'t': time})
 for series in data:
@@ -106,7 +105,7 @@ for series in data:
 
 # Remove acceleration outliers
 acc_threshold = 4.0  # m/ss
-df = df[df['dde'].abs() < acc_threshold]
+#df = df[df['dde'].abs() < acc_threshold]
 
 # Timeseries filtering
 filt = True
@@ -123,18 +122,19 @@ else:
 # Time slice
 # df = df[(df['t'] > 2.716) & (df['t'] < 4.0)]  # hyl2_PRBS_with_contact
 # df = df[(df['t'] > 1.650) & (df['t'] < 7.0)]  # hyl2_sine_with_contact
+df = df[(df['t'] > 5.3) & (df['t'] < 7.0)]  # bravo7_chirp
 
 print(f"Average inertia m_zz: {df['m'].mean():.3f}")
 
 # Plot
 # plt.style.use(['science', 'ieee'])
 
-# fig, ax = plt.subplots()
-# ax.set_xlabel('Time (s)')
-# ax.plot(df['t'], df['de'], label=r'${e}$', linestyle='-', linewidth=0.8, color='blue')
+fig, ax = plt.subplots()
+ax.set_xlabel('Time (s)')
+ax.plot(df['t'], df['e'], label='k(e^2)', linestyle='-', linewidth=0.8, color='blue')
 # ax.plot(df['t'], df['dde'], label=r'$\dot{e}$', linewidth=0.8, color='k')
 # ax.plot(df['t'], df['dde_filt'], label=r'$\ddot{e}$', linewidth=0.8, color='r')
-# ax.grid(True)
+ax.grid(True)
 
 # Impedance Params
 k_d = 639.91
@@ -142,14 +142,9 @@ d_d = 160.32
 m_d = 0.7484
 # m_d = 10.0
 
-# Phase flow vector field
-X = df['e_filt'].to_numpy()[::20]
-Y = df['de_filt'].to_numpy()[::20]
-Z = df['dde_filt'].to_numpy()[::20]
-
-U = Y
-V = - k_d/m_d * X - d_d/m_d * Y
-W = - k_d/m_d * Y - d_d/m_d * Z
+X = df['e_filt'].to_numpy()[::10]
+Y = df['de_filt'].to_numpy()[::10]
+Z = df['dde_filt'].to_numpy()[::10]
 
 ax3 = plt.figure().add_subplot(projection='3d')
 
@@ -158,8 +153,6 @@ ax3.set_ylabel(r'$\dot{e}$')
 ax3.set_zlabel(r'$\ddot{e}$')
 ax3.plot(df['e'], df['de_filt'], df['dde_filt'],
          linestyle='-', linewidth=0.7, color='blue')
-
-ax3.quiver(X, Y, Z, U, V, W, normalize=True, length=0.05, arrow_length_ratio=0.06)
 
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.25)
