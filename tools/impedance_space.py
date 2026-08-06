@@ -37,10 +37,12 @@ def lpfilter(data, cutoff, sampling):
     y = filtfilt(b, a, data, method='gust')
     return y
 
+bag_path = '../../sys_id/bravo7_PRBS_K500D0/'
+bag_path = '../../sys_id/hyl2_PRBS_with_contact/'
 bag_path = '../../sys_id/spot_leg_PRBS_nonlinear/'
-bag_path = '../../sys_id/spot_leg_chirp/'
 
 controller_name = 'bravo7_controller'
+controller_name = 'hyl_controller'
 controller_name = 'spot_leg_control'
 
 # ATTENTION: set accordingly {x, y, z, r, p, w}
@@ -123,7 +125,7 @@ else:
 # df = df[(df['t'] > 2.716) & (df['t'] < 4.0)]  # hyl2_PRBS_with_contact
 # df = df[(df['t'] > 1.650) & (df['t'] < 7.0)]  # hyl2_sine_with_contact
 # df = df[(df['t'] > 5.3) & (df['t'] < 7.0)]  # bravo7_chirp
-df = df[(df['t'] > 1.95) & (df['t'] < 4.0)]  # spot_leg_chirp
+# df = df[(df['t'] > 1.95) & (df['t'] < 4.0)]  # spot_leg_chirp
 
 print(f"Average inertia m_zz: {df['m'].mean():.3f}")
 
@@ -132,8 +134,9 @@ print(f"Average inertia m_zz: {df['m'].mean():.3f}")
 
 fig, ax = plt.subplots()
 ax.set_xlabel('Time (s)')
-ax.plot(df['t'], df['e'], label='k(e^2)', linestyle='-', linewidth=0.8, color='blue')
-# ax.plot(df['t'], df['dde'], label=r'$\dot{e}$', linewidth=0.8, color='k')
+ax.plot(df['t'], df['e'], label='e', linestyle='-', linewidth=0.8, color='black')
+ax.plot(df['t'], df['de'], label='de', linestyle='-', linewidth=0.8, color='blue')
+ax.plot(df['t'], df['dde'], label=r'dde', linewidth=0.8, color='r')
 # ax.plot(df['t'], df['dde_filt'], label=r'$\ddot{e}$', linewidth=0.8, color='r')
 ax.grid(True)
 
