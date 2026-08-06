@@ -23,35 +23,47 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-# System params
+# System parameters
 mi = 2.5
 
-# Simulation params
-dt = 0.001
+# Simulation parameters
+dt = 0.002
 duration = 16.0
 time = np.arange(0.0, duration, dt)
-y = np.empty((len(time), 2))  # State time vector
+x = np.empty((len(time), 2))  # State time series
 ddx = np.zeros((len(time), 1))  # acceleration
 f = np.empty(2)
 
-y[0] = np.array([2.0, 0.0])
+x[0] = np.array([2.0, 0.0])  # initial state
 
-# Forward Euler integration (Improve using Runge-Kutta)
+def F(x):
+    """Nonlinear dynamics flow for the Van der Pol oscillator."""
+    f = np.zeros(2)
+    f[0] = x[1]
+    f[1] = mi*(1.0 - x[0]*x[0]) * x[1] - x[0]
+    return f
+
+# Numerical Integration (Fourth order Runge-Kutta)
 for k in range(1, len(time)):
-    f[0] = y[k - 1, 1]  # velocity
-    x = y[k - 1, 0]
-    f[1] = mi*(1 - x*x) * y[k - 1, 1] - x  # acceleration
-    ddx[k] = f[1]
-    y[k] = y[k - 1] + dt*f
+    # Runge-Kutta terms:
+    r1 = F(x[k - 1])*dt
+    r2 = F(x[k - 1] + 0.5*r1)*dt
+    r3 = F(x[k - 1] + 0.5*r2)*dt
+    r4 = F(x[k - 1] + r3)*dt
+    # Runge-Kutta update:
+    rk = (r1 + 2*r2 + 2*r3 + r4) * (1/6)
+    x[k] = x[k - 1] + rk
+    # get acceleration:
+    ddx[k] = rk[1] / dt
 
 # Plot bounds
-x_ub = np.max(y[:, 0])
+x_ub = np.max(x[:, 0])
 x_ub = x_ub + abs(x_ub) * 0.10
-x_lb = np.min(y[:, 0])
+x_lb = np.min(x[:, 0])
 x_lb = x_lb - abs(x_lb) * 0.20
-y_ub = np.max(y[:, 1])
+y_ub = np.max(x[:, 1])
 y_ub = y_ub + abs(y_ub) * 0.20
-y_lb = np.min(y[:, 1])
+y_lb = np.min(x[:, 1])
 y_lb = y_lb - abs(y_lb) * 0.10
 
 fig = plt.figure(figsize=(5, 4))
@@ -65,24 +77,24 @@ time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes)
 tail_length = int(1/dt) * 8  # 8 seconds
 
 def animate(i):
-    history_x = y[:i, 0]
-    history_y = y[:i, 1]
+    history_x = x[:i, 0]
+    history_y = x[:i, 1]
     if i > tail_length:
-        history_x = y[i-tail_length:i, 0]
-        history_y = y[i-tail_length:i, 1]
+        history_x = x[i-tail_length:i, 0]
+        history_y = x[i-tail_length:i, 1]
     trace.set_data(history_x, history_y)
     time_text.set_text(time_template % (i*dt))
     return trace, time_text
 
 ani = animation.FuncAnimation(
-    fig, animate, len(y), interval=dt*1000, blit=True)
+    fig, animate, len(x), interval=dt*1000, blit=True)
 
 ax3 = plt.figure().add_subplot(projection='3d')
 
 ax3.set_xlabel(r'$x$')
 ax3.set_ylabel(r'$\dot{x}$')
 ax3.set_zlabel(r'$\ddot{x}$')
-ax3.plot(y[:, 0], y[:, 1], ddx[:, 0], linestyle='-', linewidth=0.7, color='blue')
+ax3.plot(x[:, 0], x[:, 1], ddx[:, 0], linestyle='-', linewidth=0.7, color='blue')
 
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.25)
