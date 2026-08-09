@@ -23,10 +23,10 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-from zspace_id import ZSpaceID
+from zspace_id import ZSpaceID, FrenetSerret
 
 # System parameters
-mi = -0.88
+mi = -1.0
 
 # Simulation parameters
 dt = 0.002
@@ -37,8 +37,10 @@ ddx = np.zeros((len(time), 1))  # acceleration
 f = np.empty(2)
 
 # ZSpace identification
-sys_id = ZSpaceID(20)
-N = np.zeros((len(time), 3))
+# sys_id = ZSpaceID(10)
+sys_id = FrenetSerret(5, dt)
+B = np.zeros((len(time), 3))
+T = np.zeros((len(time), 3))
 
 damping = np.zeros((len(time), 1))  # damping coefficient (ground truth)
 damping_est = np.zeros((len(time), 1))
@@ -68,9 +70,11 @@ for k in range(1, len(time)):
     damping[k] = -mi*(1.0 - x[k - 1, 0]*x[k - 1, 0])
     # Compute zspace normal (x, dx, ddx)
     sys_id.update(x[k - 1, 0], x[k - 1, 1], ddx[k][0])
-    N[k] = sys_id.get_normal()
-    # Damping estimation: (with k = 1)
-    damping_est[k] = sys_id.get_normal()[1] / sys_id.get_normal()[0]
+    B[k] = sys_id.get_normal()
+    T[k] = sys_id.get_tangent()
+    # Damping estimation: (with m = k = 1)
+    n1 = sys_id.get_normal()[1]
+    damping_est[k] = math.sqrt(2*n1*n1/(1 - n1*n1))
 
 # Fill the first entry
 ddx[0] = ddx[1]
@@ -87,28 +91,27 @@ y_ub = y_ub + abs(y_ub) * 0.20
 y_lb = np.min(x[:, 1])
 y_lb = y_lb - abs(y_lb) * 0.10
 
-fig = plt.figure(figsize=(5, 4))
-ax = fig.add_subplot(autoscale_on=False, xlim=(x_lb, x_ub), ylim=(y_lb, y_ub))
-ax.set_aspect('equal')
+# fig = plt.figure(figsize=(5, 4))
+# ax = fig.add_subplot(autoscale_on=False, xlim=(x_lb, x_ub), ylim=(y_lb, y_ub))
+# ax.set_aspect('equal')
 
-trace, = ax.plot([], [], '--', color='mediumblue', lw=1.3, ms=0.5)
-time_template = 'time = %.1fs'
-time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes)
+# trace, = ax.plot([], [], '--', color='mediumblue', lw=1.3, ms=0.5)
+# time_template = 'time = %.1fs'
+# time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes)
+# tail_length = int(1/dt) * 8  # 8 seconds
 
-tail_length = int(1/dt) * 8  # 8 seconds
+# def animate(i):
+#     history_x = x[:i, 0]
+#     history_y = x[:i, 1]
+#     if i > tail_length:
+#         history_x = x[i-tail_length:i, 0]
+#         history_y = x[i-tail_length:i, 1]
+#     trace.set_data(history_x, history_y)
+#     time_text.set_text(time_template % (i*dt))
+#     return trace, time_text
 
-def animate(i):
-    history_x = x[:i, 0]
-    history_y = x[:i, 1]
-    if i > tail_length:
-        history_x = x[i-tail_length:i, 0]
-        history_y = x[i-tail_length:i, 1]
-    trace.set_data(history_x, history_y)
-    time_text.set_text(time_template % (i*dt))
-    return trace, time_text
-
-ani = animation.FuncAnimation(
-    fig, animate, len(x), interval=dt*1000, blit=True)
+# ani = animation.FuncAnimation(
+#     fig, animate, len(x), interval=dt*1000, blit=True)
 
 ax3 = plt.figure().add_subplot(projection='3d')
 
@@ -126,19 +129,43 @@ ax2.plot(time, damping, label='Damping (ground truth)',
          linestyle='--', linewidth=1.0, color='black')
 ax2.plot(time, damping_est, label='Damping (ZSpace)',
          linestyle='-', linewidth=0.9, color='red')
+# Comparing with ddx
+ax2.plot(time, ddx[:, 0], label='ddx',
+         linestyle='-', linewidth=0.9, color='darkgreen')
 ax2.legend(loc='upper right', columnspacing=0.5)
 ax2.grid(True)
 
 # Normal vector
 fig4, ax4 = plt.subplots()
 ax4.set_xlabel('Time (s)')
-ax4.plot(time, N[:, 0], label='n_0',
+ax4.plot(time[5:], B[5:, 0], label='n_0',
          linestyle='-', linewidth=1.0, color='black')
-ax4.plot(time, N[:, 1], label='n_1',
+ax4.plot(time[5:], B[5:, 1], label='n_1',
          linestyle='-', linewidth=0.9, color='red')
-ax4.plot(time, N[:, 2], label='n_2',
+ax4.plot(time[5:], B[5:, 2], label='n_2',
          linestyle='-', linewidth=0.9, color='blue')
 ax4.legend(loc='upper right', columnspacing=0.5)
 ax4.grid(True)
+
+
+# Animation with tangent vector
+fig5 = plt.figure()
+ax5 = fig5.add_subplot(projection='3d')
+ax5.set(xlim3d=(x_lb, x_ub), xlabel=r'$x$')
+ax5.set(ylim3d=(y_lb, y_ub), ylabel=r'$\dot{x}$')
+ax5.set(zlim3d=(-5.0, 5.0), zlabel=r'$\ddot{x}$')
+trace, = ax5.plot([], [], [], '--', color='mediumblue', lw=1.3, ms=0.5)
+tangent_vec, = ax5.plot([], [], [], '-', lw=1.3, ms=0.7)
+
+def animate5(i):
+    trace.set_data_3d(x[:i, 0], x[:i, 1], ddx[:i, 0])
+
+    p = np.concatenate([x[i], ddx[i]])
+    t_p = T[i] + p
+    tangent_vec.set_data_3d([p[0], t_p[0]], [p[1], t_p[1]], [p[2], t_p[2]])
+    return trace, tangent_vec
+
+ani2 = animation.FuncAnimation(
+    fig5, animate5, len(x), interval=dt*1000, blit=True)
 
 plt.show()

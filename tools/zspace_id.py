@@ -61,3 +61,60 @@ class ZSpaceID:
 
     def get_normal(self):
         return self.normal_vector
+
+
+class FrenetSerret:
+    """Compute the binormal vector based on the Frenet-Serret formula."""
+
+    def __init__(self, window: int, delta_t: float):
+        if window > 5:
+          self.window_size = window
+        else:
+          self.window_size = 5
+        # TODO(@me): use window size ...
+
+        self.buffer = np.zeros((self.window_size, 3))
+        self.binormal_vector = np.zeros(3)
+        self.tangent_vector = np.ones(3)
+        self.r_prime2 = np.zeros(3)
+        self.r_prime = np.zeros(3)
+        self.dt = delta_t
+
+    def update(self, e: float, de: float, dde: float):
+        if math.isnan(e) or math.isnan(de) or math.isnan(dde):
+            return self.binormal_vector
+
+        new_point = np.array([e, de, dde])
+        # Roll buffer
+        for i in range(self.window_size - 1, -1, -1):
+          self.buffer[i] = self.buffer[i - 1]
+        self.buffer[0] = new_point
+
+        # Take the point at the center of the sliding window: '-2, -1, 0, 1, 2'
+        d_acc = (-self.buffer[0, 2] + 8*self.buffer[1, 2] - 8*self.buffer[3, 2] + self.buffer[4, 2])/(12 * self.dt)
+        # Assign r'(t):
+        self.r_prime[0] = self.buffer[2, 1]
+        self.r_prime[1] = self.buffer[2, 2]
+        self.r_prime[2] = d_acc
+
+        self.tangent_vector = self.r_prime
+        self.tangent_vector /= np.linalg.norm(self.tangent_vector)
+
+        # dde 2nd derivative ('e' 4th order derivative!)
+        dd_acc = (-self.buffer[0, 2] + 16*self.buffer[1, 2] - 30*self.buffer[2, 2] + 16*self.buffer[3, 2] - self.buffer[4, 2])/(12 * self.dt * self.dt)
+
+        # Assign r''(t):
+        self.r_prime2[0] = self.buffer[2, 2]
+        self.r_prime2[1] = d_acc
+        self.r_prime2[2] = dd_acc
+
+        self.binormal_vector = np.cross(self.r_prime, self.r_prime2)
+        self.binormal_vector /= np.linalg.norm(self.binormal_vector)
+
+    def get_normal(self):
+        """This is actually the binormal vector B = T x N."""
+        return self.binormal_vector
+
+    def get_tangent(self):
+        """Tangent vector in the impedance space."""
+        return self.tangent_vector
