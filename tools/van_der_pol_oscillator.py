@@ -26,7 +26,7 @@ import numpy as np
 from zspace_id import ZSpaceID, FrenetSerret
 
 # System parameters
-mi = -1.0
+mi = -0.1
 
 # Simulation parameters
 dt = 0.002
@@ -156,14 +156,17 @@ ax5.set(ylim3d=(y_lb, y_ub), ylabel=r'$\dot{x}$')
 ax5.set(zlim3d=(-5.0, 5.0), zlabel=r'$\ddot{x}$')
 trace, = ax5.plot([], [], [], '--', color='mediumblue', lw=1.3, ms=0.5)
 tangent_vec, = ax5.plot([], [], [], '-', lw=1.3, ms=0.7)
+binormal_vec, = ax5.plot([], [], [], '-', color='red', lw=1.3, ms=0.7)
 
 def animate5(i):
     trace.set_data_3d(x[:i, 0], x[:i, 1], ddx[:i, 0])
 
     p = np.concatenate([x[i], ddx[i]])
     t_p = T[i] + p
+    b_p = B[i] + p
     tangent_vec.set_data_3d([p[0], t_p[0]], [p[1], t_p[1]], [p[2], t_p[2]])
-    return trace, tangent_vec
+    binormal_vec.set_data_3d([p[0], b_p[0]], [p[1], b_p[1]], [p[2], b_p[2]])
+    return trace, tangent_vec, binormal_vec
 
 ani2 = animation.FuncAnimation(
     fig5, animate5, len(x), interval=dt*1000, blit=True)
