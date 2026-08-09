@@ -23,8 +23,10 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+from zspace_id import ZSpaceID
+
 # System parameters
-mi = 2.5
+mi = -0.88
 
 # Simulation parameters
 dt = 0.002
@@ -33,6 +35,13 @@ time = np.arange(0.0, duration, dt)
 x = np.empty((len(time), 2))  # State time series
 ddx = np.zeros((len(time), 1))  # acceleration
 f = np.empty(2)
+
+# ZSpace identification
+sys_id = ZSpaceID(20)
+N = np.zeros((len(time), 3))
+
+damping = np.zeros((len(time), 1))  # damping coefficient (ground truth)
+damping_est = np.zeros((len(time), 1))
 
 x[0] = np.array([2.0, 0.0])  # initial state
 
@@ -55,6 +64,18 @@ for k in range(1, len(time)):
     x[k] = x[k - 1] + rk
     # get acceleration:
     ddx[k] = rk[1] / dt
+    # System identification #
+    damping[k] = -mi*(1.0 - x[k - 1, 0]*x[k - 1, 0])
+    # Compute zspace normal (x, dx, ddx)
+    sys_id.update(x[k - 1, 0], x[k - 1, 1], ddx[k][0])
+    N[k] = sys_id.get_normal()
+    # Damping estimation: (with k = 1)
+    damping_est[k] = sys_id.get_normal()[1] / sys_id.get_normal()[0]
+
+# Fill the first entry
+ddx[0] = ddx[1]
+damping[0] = damping[1]
+damping_est[0] = damping_est[1]
 
 # Plot bounds
 x_ub = np.max(x[:, 0])
@@ -95,8 +116,29 @@ ax3.set_xlabel(r'$x$')
 ax3.set_ylabel(r'$\dot{x}$')
 ax3.set_zlabel(r'$\ddot{x}$')
 ax3.plot(x[:, 0], x[:, 1], ddx[:, 0], linestyle='-', linewidth=0.7, color='blue')
-
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.25)
+
+# Verification
+fig3, ax2 = plt.subplots()
+ax2.set_xlabel('Time (s)')
+ax2.plot(time, damping, label='Damping (ground truth)',
+         linestyle='--', linewidth=1.0, color='black')
+ax2.plot(time, damping_est, label='Damping (ZSpace)',
+         linestyle='-', linewidth=0.9, color='red')
+ax2.legend(loc='upper right', columnspacing=0.5)
+ax2.grid(True)
+
+# Normal vector
+fig4, ax4 = plt.subplots()
+ax4.set_xlabel('Time (s)')
+ax4.plot(time, N[:, 0], label='n_0',
+         linestyle='-', linewidth=1.0, color='black')
+ax4.plot(time, N[:, 1], label='n_1',
+         linestyle='-', linewidth=0.9, color='red')
+ax4.plot(time, N[:, 2], label='n_2',
+         linestyle='-', linewidth=0.9, color='blue')
+ax4.legend(loc='upper right', columnspacing=0.5)
+ax4.grid(True)
 
 plt.show()
