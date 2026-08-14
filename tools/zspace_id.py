@@ -18,6 +18,7 @@
 # [https://dl.acm.org/doi/pdf/10.1145/777792.777840]
 
 import math
+
 import numpy as np
 
 
@@ -64,7 +65,8 @@ class ZSpaceID:
 
 
 class FrenetSerret:
-    """Compute the binormal vector based on the Frenet-Serret formula."""
+    """Compute the binormal vector based on the Frenet-Serret formula,
+        modified to include the impedance space origin."""
 
     def __init__(self, window: int, delta_t: float):
         if window > 5:
@@ -76,7 +78,6 @@ class FrenetSerret:
         self.buffer = np.zeros((self.window_size, 3))
         self.binormal_vector = np.zeros(3)
         self.tangent_vector = np.ones(3)
-        self.r_prime2 = np.zeros(3)
         self.r_prime = np.zeros(3)
         self.dt = delta_t
 
@@ -100,15 +101,7 @@ class FrenetSerret:
         self.tangent_vector = self.r_prime
         self.tangent_vector /= np.linalg.norm(self.tangent_vector)
 
-        # dde 2nd derivative ('e' 4th order derivative!)
-        dd_acc = (-self.buffer[0, 2] + 16*self.buffer[1, 2] - 30*self.buffer[2, 2] + 16*self.buffer[3, 2] - self.buffer[4, 2])/(12 * self.dt * self.dt)
-
-        # Assign r''(t):
-        self.r_prime2[0] = self.buffer[2, 2]
-        self.r_prime2[1] = d_acc
-        self.r_prime2[2] = dd_acc
-
-        self.binormal_vector = np.cross(self.r_prime, self.r_prime2)
+        self.binormal_vector = np.cross(self.r_prime, self.buffer[2])
         self.binormal_vector /= np.linalg.norm(self.binormal_vector)
 
     def get_normal(self):

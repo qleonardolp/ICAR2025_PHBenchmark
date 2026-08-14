@@ -26,7 +26,8 @@ import numpy as np
 from zspace_id import ZSpaceID, FrenetSerret
 
 # System parameters
-mi = -0.1
+mi = -0.9
+d_desired = mi
 
 # Simulation parameters
 dt = 0.002
@@ -34,6 +35,7 @@ duration = 16.0
 time = np.arange(0.0, duration, dt)
 x = np.empty((len(time), 2))  # State time series
 ddx = np.zeros((len(time), 1))  # acceleration
+ddx_desired = np.zeros((len(time), 1))  # acceleration
 f = np.empty(2)
 
 # ZSpace identification
@@ -47,20 +49,24 @@ damping_est = np.zeros((len(time), 1))
 
 x[0] = np.array([2.0, 0.0])  # initial state
 
-def F(x):
+def F(x: np.ndarray, u: float):
     """Nonlinear dynamics flow for the Van der Pol oscillator."""
     f = np.zeros(2)
     f[0] = x[1]
-    f[1] = mi*(1.0 - x[0]*x[0]) * x[1] - x[0]
+    f[1] = mi*(1.0 - x[0]*x[0]) * x[1] - x[0] + u
     return f
 
 # Numerical Integration (Fourth order Runge-Kutta)
 for k in range(1, len(time)):
+    # Desired acceleration
+    ddx_desired[k] = -d_desired * x[k - 1, 1] - x[k - 1, 0]
+    # Controller
+    u = 0.0 * (ddx_desired[k][0] - ddx[k - 1][0])  # scalar
     # Runge-Kutta terms:
-    r1 = F(x[k - 1])*dt
-    r2 = F(x[k - 1] + 0.5*r1)*dt
-    r3 = F(x[k - 1] + 0.5*r2)*dt
-    r4 = F(x[k - 1] + r3)*dt
+    r1 = F(x[k - 1], u)*dt
+    r2 = F(x[k - 1] + 0.5*r1, u)*dt
+    r3 = F(x[k - 1] + 0.5*r2, u)*dt
+    r4 = F(x[k - 1] + r3, u)*dt
     # Runge-Kutta update:
     rk = (r1 + 2*r2 + 2*r3 + r4) * (1/6)
     x[k] = x[k - 1] + rk
@@ -70,14 +76,19 @@ for k in range(1, len(time)):
     damping[k] = -mi*(1.0 - x[k - 1, 0]*x[k - 1, 0])
     # Compute zspace normal (x, dx, ddx)
     sys_id.update(x[k - 1, 0], x[k - 1, 1], ddx[k][0])
-    B[k] = sys_id.get_normal()
     T[k] = sys_id.get_tangent()
+    B[k] = sys_id.get_normal()
     # Damping estimation: (with m = k = 1)
     n1 = sys_id.get_normal()[1]
-    damping_est[k] = math.sqrt(2*n1*n1/(1 - n1*n1))
+    d2 = 2*n1*n1/(1 - n1*n1)
+    if n1 >= 0:
+        damping_est[k] = math.sqrt(d2)
+    else:
+        damping_est[k] = -math.sqrt(d2)
 
 # Fill the first entry
 ddx[0] = ddx[1]
+ddx_desired[0] = ddx_desired[1]
 damping[0] = damping[1]
 damping_est[0] = damping_est[1]
 
@@ -91,47 +102,25 @@ y_ub = y_ub + abs(y_ub) * 0.20
 y_lb = np.min(x[:, 1])
 y_lb = y_lb - abs(y_lb) * 0.10
 
-# fig = plt.figure(figsize=(5, 4))
-# ax = fig.add_subplot(autoscale_on=False, xlim=(x_lb, x_ub), ylim=(y_lb, y_ub))
-# ax.set_aspect('equal')
-
-# trace, = ax.plot([], [], '--', color='mediumblue', lw=1.3, ms=0.5)
-# time_template = 'time = %.1fs'
-# time_text = ax.text(0.05, 0.95, '', transform=ax.transAxes)
-# tail_length = int(1/dt) * 8  # 8 seconds
-
-# def animate(i):
-#     history_x = x[:i, 0]
-#     history_y = x[:i, 1]
-#     if i > tail_length:
-#         history_x = x[i-tail_length:i, 0]
-#         history_y = x[i-tail_length:i, 1]
-#     trace.set_data(history_x, history_y)
-#     time_text.set_text(time_template % (i*dt))
-#     return trace, time_text
-
-# ani = animation.FuncAnimation(
-#     fig, animate, len(x), interval=dt*1000, blit=True)
-
 ax3 = plt.figure().add_subplot(projection='3d')
 
 ax3.set_xlabel(r'$x$')
 ax3.set_ylabel(r'$\dot{x}$')
 ax3.set_zlabel(r'$\ddot{x}$')
-ax3.plot(x[:, 0], x[:, 1], ddx[:, 0], linestyle='-', linewidth=0.7, color='blue')
+ax3.plot(x[:, 0], x[:, 1], ddx[:, 0],
+    label='Van der Pol', linestyle='-', linewidth=0.7, color='blue')
+ax3.plot(x[:, 0], x[:, 1], ddx_desired[:, 0],
+    label='Mass-spring-damper', linestyle='-', linewidth=0.7, color='red')
 ax3.legend(loc='upper left', columnspacing=0.5)
 ax3.grid(True, alpha=0.25)
 
 # Verification
 fig3, ax2 = plt.subplots()
 ax2.set_xlabel('Time (s)')
-ax2.plot(time, damping, label='Damping (ground truth)',
+ax2.plot(time[5:], damping[5:], label='Damping (ground truth)',
          linestyle='--', linewidth=1.0, color='black')
-ax2.plot(time, damping_est, label='Damping (ZSpace)',
+ax2.plot(time[5:], damping_est[5:], label='Damping (ZSpace)',
          linestyle='-', linewidth=0.9, color='red')
-# Comparing with ddx
-ax2.plot(time, ddx[:, 0], label='ddx',
-         linestyle='-', linewidth=0.9, color='darkgreen')
 ax2.legend(loc='upper right', columnspacing=0.5)
 ax2.grid(True)
 
@@ -154,9 +143,11 @@ ax5 = fig5.add_subplot(projection='3d')
 ax5.set(xlim3d=(x_lb, x_ub), xlabel=r'$x$')
 ax5.set(ylim3d=(y_lb, y_ub), ylabel=r'$\dot{x}$')
 ax5.set(zlim3d=(-5.0, 5.0), zlabel=r'$\ddot{x}$')
+ax5.set_box_aspect([1, 1, 1])
 trace, = ax5.plot([], [], [], '--', color='mediumblue', lw=1.3, ms=0.5)
-tangent_vec, = ax5.plot([], [], [], '-', lw=1.3, ms=0.7)
-binormal_vec, = ax5.plot([], [], [], '-', color='red', lw=1.3, ms=0.7)
+origin_vec, = ax5.plot([], [], [], '-', color='red', lw=1.3, ms=0.7)
+tangent_vec, = ax5.plot([], [], [], '-', color='darkgreen', lw=1.3, ms=0.7)
+binormal_vec, = ax5.plot([], [], [], '-', color='blue', lw=1.3, ms=0.7)
 
 def animate5(i):
     trace.set_data_3d(x[:i, 0], x[:i, 1], ddx[:i, 0])
@@ -164,9 +155,10 @@ def animate5(i):
     p = np.concatenate([x[i], ddx[i]])
     t_p = T[i] + p
     b_p = B[i] + p
+    origin_vec.set_data_3d([0.0, p[0]], [0.0, p[1]], [0.0, p[2]])
     tangent_vec.set_data_3d([p[0], t_p[0]], [p[1], t_p[1]], [p[2], t_p[2]])
     binormal_vec.set_data_3d([p[0], b_p[0]], [p[1], b_p[1]], [p[2], b_p[2]])
-    return trace, tangent_vec, binormal_vec
+    return trace, origin_vec, tangent_vec, binormal_vec
 
 ani2 = animation.FuncAnimation(
     fig5, animate5, len(x), interval=dt*1000, blit=True)
